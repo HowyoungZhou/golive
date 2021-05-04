@@ -44,6 +44,7 @@ func main() {
 	s.RegisterInbound("tcp", inbound.RegisterTCPInbound)
 	s.RegisterInbound("srt", inbound.RegisterSRTInbound)
 	s.RegisterOutbound("webrtc", outbound.RegisterWebRTC)
+	s.RegisterOutbound("srt", outbound.RegisterSRTOutbound)
 
 	for _, i := range options.Inbounds {
 		err := s.AddInbound(i.Id, i.Type, i.Options)
