@@ -21,7 +21,7 @@ type UDPInbound struct {
 func NewUDPInbound(options *UDPInboundOptions) (*UDPInbound, error) {
 	res := &UDPInbound{
 		options: options,
-		logger:  log.New().WithFields(log.Fields{"module": "DatagramInbound"}),
+		logger:  log.New().WithFields(log.Fields{"module": "UDPInbound"}),
 		reader:  NewAsyncReader(),
 	}
 	return res, nil
