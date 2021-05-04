@@ -11,7 +11,7 @@ type Server struct {
 	inbounds           map[string]Inbound
 	outbounds          map[string]Outbound
 	processes          map[string]Process
-	pipes              map[Inbound][]Outbound
+	pipes              map[Inbound][]chan []byte
 }
 
 func New() *Server {
@@ -22,7 +22,7 @@ func New() *Server {
 		make(map[string]Inbound),
 		make(map[string]Outbound),
 		make(map[string]Process),
-		make(map[Inbound][]Outbound),
+		make(map[Inbound][]chan []byte),
 	}
 }
 
@@ -94,37 +94,18 @@ func (s *Server) AddPipe(in string, outs []string) error {
 	if !ok {
 		return errors.New("unknown inbound: " + in)
 	}
-	var outbounds []Outbound
+	var outChannels []chan []byte
 	for _, out := range outs {
 		o, ok := s.outbounds[out]
 		if !ok {
-			return errors.New("unknown outbounds: " + out)
+			return errors.New("unknown outbound: " + out)
 		}
-		outbounds = append(outbounds, o)
+		c := make(chan []byte, 102400)
+		go pipeWrite(o, c)
+		outChannels = append(outChannels, c)
 	}
-	s.pipes[i] = outbounds
+	s.pipes[i] = outChannels
 	return nil
-}
-
-func pipe(in Inbound, outs []Outbound) {
-	for {
-		buffer := make([]byte, 10240)
-		n, err := in.Read(buffer)
-		if n == 0 {
-			continue
-		}
-		if err != nil {
-			// TODO: handle error
-			panic(err)
-		}
-
-		for _, out := range outs {
-			_, err := out.Write(buffer[:n])
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
 }
 
 func (s *Server) Run() error {
@@ -149,9 +130,36 @@ func (s *Server) Run() error {
 		}
 	}
 
-	for in, outs := range s.pipes {
-		go pipe(in, outs)
+	for in, channels := range s.pipes {
+		go pipeRead(in, channels)
 	}
 
 	return nil
+}
+
+func pipeWrite(o Outbound, c chan []byte) {
+	for {
+		_, err := o.Write(<-c)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func pipeRead(in Inbound, channels []chan []byte) {
+	for {
+		buffer := make([]byte, 1316)
+		n, err := in.Read(buffer)
+		if n == 0 {
+			continue
+		}
+		if err != nil {
+			// TODO: handle error
+			panic(err)
+		}
+
+		for _, c := range channels {
+			c <- buffer[:n]
+		}
+	}
 }
