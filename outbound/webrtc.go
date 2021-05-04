@@ -72,6 +72,7 @@ func (o *WebRTCOutbound) serveHTTP() {
 		err := c.Bind(&offer)
 		if err != nil {
 			c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 		// TODO: load from config
 		peerConnectionConfig := webrtc.Configuration{
@@ -84,13 +85,15 @@ func (o *WebRTCOutbound) serveHTTP() {
 		// Create a new PeerConnection
 		peerConnection, err := webrtc.NewPeerConnection(peerConnectionConfig)
 		if err != nil {
-			panic(err)
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
 		}
 
 		for _, track := range o.tracks {
 			rtpSender, err := peerConnection.AddTrack(track)
 			if err != nil {
-				panic(err)
+				c.AbortWithError(http.StatusInternalServerError, err)
+				return
 			}
 
 			// Read incoming RTCP packets
@@ -108,13 +111,15 @@ func (o *WebRTCOutbound) serveHTTP() {
 		// Set the remote SessionDescription
 		err = peerConnection.SetRemoteDescription(offer)
 		if err != nil {
-			panic(err)
+			c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 
 		// Create answer
 		answer, err := peerConnection.CreateAnswer(nil)
 		if err != nil {
-			panic(err)
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
 		}
 
 		// Create channel that is blocked until ICE Gathering is complete
@@ -123,7 +128,8 @@ func (o *WebRTCOutbound) serveHTTP() {
 		// Sets the LocalDescription, and starts our UDP listeners
 		err = peerConnection.SetLocalDescription(answer)
 		if err != nil {
-			panic(err)
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
 		}
 
 		<-gatherComplete
