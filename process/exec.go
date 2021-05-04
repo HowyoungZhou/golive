@@ -5,6 +5,7 @@ import (
 	"github.com/howyoungzhou/golive/server"
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os/exec"
 )
 
@@ -15,10 +16,16 @@ type ExecProcessOptions struct {
 
 type ExecProcess struct {
 	options *ExecProcessOptions
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  io.ReadCloser
 }
 
 func NewExecProcess(options *ExecProcessOptions) (*ExecProcess, error) {
-	return &ExecProcess{options: options}, nil
+	return &ExecProcess{
+		options: options,
+		cmd:     exec.Command(options.Path, options.Args...),
+	}, nil
 }
 
 func RegisterExecProcess(server *server.Server, id string, options map[string]interface{}) (server.Process, error) {
@@ -30,18 +37,23 @@ func RegisterExecProcess(server *server.Server, id string, options map[string]in
 }
 
 func (e *ExecProcess) Init() error {
-	cmd := exec.Command(e.options.Path, e.options.Args...)
-	stderr, err := cmd.StderrPipe()
+	var err error
+	e.stdin, err = e.cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
 
-	stdout, err := cmd.StdoutPipe()
+	e.stdout, err = e.cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
 
-	err = cmd.Start()
+	stderr, err := e.cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	err = e.cmd.Start()
 	if err != nil {
 		return err
 	}
@@ -56,15 +68,13 @@ func (e *ExecProcess) Init() error {
 		}
 	}()
 
-	go func() {
-		in := bufio.NewScanner(stdout)
-
-		for in.Scan() {
-			log.Infoln(in.Text())
-		}
-		if err := in.Err(); err != nil {
-			log.WithError(err).Error("failed to read stdout")
-		}
-	}()
 	return nil
+}
+
+func (e *ExecProcess) Read(p []byte) (n int, err error) {
+	return e.stdout.Read(p)
+}
+
+func (e *ExecProcess) Write(p []byte) (n int, err error) {
+	return e.stdin.Write(p)
 }

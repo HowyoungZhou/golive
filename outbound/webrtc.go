@@ -49,7 +49,7 @@ func RegisterWebRTC(server *server.Server, id string, options map[string]interfa
 		return nil, err
 	}
 	for _, t := range res.tracks {
-		server.AddOutboundObj(id+":"+t.ID(), &WebRtcTrackOutbound{t})
+		server.AddWriter(id+":"+t.ID(), &WebRtcTrackOutbound{t})
 	}
 	return res, nil
 }

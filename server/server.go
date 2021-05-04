@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"io"
 )
 
 type Server struct {
@@ -11,7 +12,9 @@ type Server struct {
 	inbounds           map[string]Inbound
 	outbounds          map[string]Outbound
 	processes          map[string]Process
-	pipes              map[Inbound][]chan []byte
+	readers            map[string]io.Reader
+	writers            map[string]io.Writer
+	pipes              map[io.Reader][]chan []byte
 }
 
 func New() *Server {
@@ -22,7 +25,9 @@ func New() *Server {
 		make(map[string]Inbound),
 		make(map[string]Outbound),
 		make(map[string]Process),
-		make(map[Inbound][]chan []byte),
+		make(map[string]io.Reader),
+		make(map[string]io.Writer),
+		make(map[io.Reader][]chan []byte),
 	}
 }
 
@@ -30,8 +35,8 @@ func (s *Server) RegisterInbound(name string, regFunc InboundRegisterFunc) {
 	s.registeredInbound[name] = regFunc
 }
 
-func (s *Server) AddInboundObj(id string, o Inbound) {
-	s.inbounds[id] = o
+func (s *Server) AddReader(id string, o io.Reader) {
+	s.readers[id] = o
 }
 
 func (s *Server) AddInbound(id, typ string, options map[string]interface{}) error {
@@ -43,7 +48,8 @@ func (s *Server) AddInbound(id, typ string, options map[string]interface{}) erro
 	if err != nil {
 		return err
 	}
-	s.AddInboundObj(id, o)
+	s.inbounds[id] = o
+	s.AddReader(id, o)
 	return nil
 }
 
@@ -51,8 +57,8 @@ func (s *Server) RegisterOutbound(name string, regFunc OutboundRegisterFunc) {
 	s.registeredOutbound[name] = regFunc
 }
 
-func (s *Server) AddOutboundObj(id string, o Outbound) {
-	s.outbounds[id] = o
+func (s *Server) AddWriter(id string, o io.Writer) {
+	s.writers[id] = o
 }
 
 func (s *Server) AddOutbound(id, typ string, options map[string]interface{}) error {
@@ -64,16 +70,13 @@ func (s *Server) AddOutbound(id, typ string, options map[string]interface{}) err
 	if err != nil {
 		return err
 	}
-	s.AddOutboundObj(id, o)
+	s.outbounds[id] = o
+	s.AddWriter(id, o)
 	return nil
 }
 
 func (s *Server) RegisterProcess(name string, regFunc ProcessRegisterFunc) {
 	s.registeredProcess[name] = regFunc
-}
-
-func (s *Server) AddProcessObj(id string, p Process) {
-	s.processes[id] = p
 }
 
 func (s *Server) AddProcess(id, typ string, options map[string]interface{}) error {
@@ -85,18 +88,20 @@ func (s *Server) AddProcess(id, typ string, options map[string]interface{}) erro
 	if err != nil {
 		return err
 	}
-	s.AddProcessObj(id, p)
+	s.processes[id] = p
+	s.AddReader(id, p)
+	s.AddWriter(id, p)
 	return nil
 }
 
 func (s *Server) AddPipe(in string, outs []string) error {
-	i, ok := s.inbounds[in]
+	i, ok := s.readers[in]
 	if !ok {
 		return errors.New("unknown inbound: " + in)
 	}
 	var outChannels []chan []byte
 	for _, out := range outs {
-		o, ok := s.outbounds[out]
+		o, ok := s.writers[out]
 		if !ok {
 			return errors.New("unknown outbound: " + out)
 		}
@@ -137,7 +142,7 @@ func (s *Server) Run() error {
 	return nil
 }
 
-func pipeWrite(o Outbound, c chan []byte) {
+func pipeWrite(o io.Writer, c chan []byte) {
 	for {
 		_, err := o.Write(<-c)
 		if err != nil {
@@ -146,7 +151,7 @@ func pipeWrite(o Outbound, c chan []byte) {
 	}
 }
 
-func pipeRead(in Inbound, channels []chan []byte) {
+func pipeRead(in io.Reader, channels []chan []byte) {
 	for {
 		buffer := make([]byte, 1316)
 		n, err := in.Read(buffer)
