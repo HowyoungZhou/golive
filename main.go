@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/howyoungzhou/golive/inbound"
 	"github.com/howyoungzhou/golive/outbound"
+	"github.com/howyoungzhou/golive/process"
 	"github.com/howyoungzhou/golive/server"
 	"io/ioutil"
 )
@@ -20,10 +21,15 @@ type Options struct {
 		Type    string `json:"type"`
 		Options map[string]interface{}
 	} `json:"outbounds"`
+	Processes []struct {
+		Id      string `json:"id"`
+		Type    string `json:"type"`
+		Options map[string]interface{}
+	} `json:"processes"`
 	Pipes []struct {
-		In   string
-		Outs []string
-	}
+		In   string   `json:"in"`
+		Outs []string `json:"outs"`
+	} `json:"pipes"`
 }
 
 func main() {
@@ -45,6 +51,7 @@ func main() {
 	s.RegisterInbound("srt", inbound.RegisterSRTInbound)
 	s.RegisterOutbound("webrtc", outbound.RegisterWebRTC)
 	s.RegisterOutbound("srt", outbound.RegisterSRTOutbound)
+	s.RegisterProcess("exec", process.RegisterExecProcess)
 
 	for _, i := range options.Inbounds {
 		err := s.AddInbound(i.Id, i.Type, i.Options)
@@ -55,6 +62,13 @@ func main() {
 
 	for _, o := range options.Outbounds {
 		err := s.AddOutbound(o.Id, o.Type, o.Options)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	for _, p := range options.Processes {
+		err := s.AddProcess(p.Id, p.Type, p.Options)
 		if err != nil {
 			panic(err)
 		}

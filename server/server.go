@@ -1,25 +1,27 @@
 package server
 
-import "errors"
+import (
+	"errors"
+)
 
 type Server struct {
 	registeredInbound  map[string]InboundRegisterFunc
 	registeredOutbound map[string]OutboundRegisterFunc
+	registeredProcess  map[string]ProcessRegisterFunc
 	inbounds           map[string]Inbound
 	outbounds          map[string]Outbound
+	processes          map[string]Process
 	pipes              map[Inbound][]Outbound
 }
-
-type InboundRegisterFunc func(server *Server, id string, options map[string]interface{}) (Inbound, error)
-
-type OutboundRegisterFunc func(server *Server, id string, options map[string]interface{}) (Outbound, error)
 
 func New() *Server {
 	return &Server{
 		make(map[string]InboundRegisterFunc),
 		make(map[string]OutboundRegisterFunc),
+		make(map[string]ProcessRegisterFunc),
 		make(map[string]Inbound),
 		make(map[string]Outbound),
+		make(map[string]Process),
 		make(map[Inbound][]Outbound),
 	}
 }
@@ -66,6 +68,27 @@ func (s *Server) AddOutbound(id, typ string, options map[string]interface{}) err
 	return nil
 }
 
+func (s *Server) RegisterProcess(name string, regFunc ProcessRegisterFunc) {
+	s.registeredProcess[name] = regFunc
+}
+
+func (s *Server) AddProcessObj(id string, p Process) {
+	s.processes[id] = p
+}
+
+func (s *Server) AddProcess(id, typ string, options map[string]interface{}) error {
+	f, ok := s.registeredProcess[typ]
+	if !ok {
+		return errors.New("unknown process: " + typ)
+	}
+	p, err := f(s, id, options)
+	if err != nil {
+		return err
+	}
+	s.AddProcessObj(id, p)
+	return nil
+}
+
 func (s *Server) AddPipe(in string, outs []string) error {
 	i, ok := s.inbounds[in]
 	if !ok {
@@ -83,6 +106,27 @@ func (s *Server) AddPipe(in string, outs []string) error {
 	return nil
 }
 
+func pipe(in Inbound, outs []Outbound) {
+	for {
+		buffer := make([]byte, 10240)
+		n, err := in.Read(buffer)
+		if n == 0 {
+			continue
+		}
+		if err != nil {
+			// TODO: handle error
+			panic(err)
+		}
+
+		for _, out := range outs {
+			_, err := out.Write(buffer[:n])
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
 func (s *Server) Run() error {
 	for _, i := range s.inbounds {
 		err := i.Init()
@@ -98,26 +142,16 @@ func (s *Server) Run() error {
 		}
 	}
 
-	for in, outs := range s.pipes {
-		go func() {
-			for {
-				buffer := make([]byte, 10240)
-				n, err := in.Read(buffer)
-				if n == 0 {
-					continue
-				}
-				if err != nil {
-					// TODO: handle error
-					panic(err)
-				}
-				for _, out := range outs {
-					_, err := out.Write(buffer[:n])
-					if err != nil {
-						panic(err)
-					}
-				}
-			}
-		}()
+	for _, p := range s.processes {
+		err := p.Init()
+		if err != nil {
+			return err
+		}
 	}
+
+	for in, outs := range s.pipes {
+		go pipe(in, outs)
+	}
+
 	return nil
 }
