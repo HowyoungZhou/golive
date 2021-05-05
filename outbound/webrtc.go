@@ -8,15 +8,19 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pion/webrtc/v3"
 	"net/http"
-	"time"
 )
 
 type WebRTCOutboundOptions struct {
-	webrtc.Configuration
+	WebRTC webrtc.Configuration
 	Tracks []struct {
 		CodecCapability webrtc.RTPCodecCapability
 		ID              string
 		StreamID        string
+	}
+	SDPServer struct {
+		CORS          cors.Config
+		ListenAddress string
+		RootPath      string
 	}
 }
 
@@ -56,18 +60,8 @@ func RegisterWebRTC(server *server.Server, id string, options map[string]interfa
 
 func (o *WebRTCOutbound) serveHTTP() {
 	r := gin.Default()
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"POST", "PATCH"},
-		AllowHeaders:     []string{"Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization", "accept", "origin", "Cache-Control", "X-Requested-With"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		AllowOriginFunc: func(origin string) bool {
-			return true
-		},
-		MaxAge: 12 * time.Hour,
-	}))
-	r.POST("/", func(c *gin.Context) {
+	r.Use(cors.New(o.options.SDPServer.CORS))
+	r.POST(o.options.SDPServer.RootPath, func(c *gin.Context) {
 		offer := webrtc.SessionDescription{}
 		err := c.Bind(&offer)
 		if err != nil {
@@ -75,13 +69,7 @@ func (o *WebRTCOutbound) serveHTTP() {
 			return
 		}
 		// TODO: load from config
-		peerConnectionConfig := webrtc.Configuration{
-			ICEServers: []webrtc.ICEServer{
-				{
-					URLs: []string{"stun:stun.l.google.com:19302"},
-				},
-			},
-		}
+		peerConnectionConfig := o.options.WebRTC
 		// Create a new PeerConnection
 		peerConnection, err := webrtc.NewPeerConnection(peerConnectionConfig)
 		if err != nil {
@@ -137,8 +125,7 @@ func (o *WebRTCOutbound) serveHTTP() {
 		// Get the LocalDescription and take it to base64 so we can paste in browser
 		c.JSON(http.StatusOK, peerConnection.LocalDescription())
 	})
-	// TODO: load config from option
-	r.Run("0.0.0.0:8080")
+	r.Run(o.options.SDPServer.ListenAddress)
 }
 
 func (o *WebRTCOutbound) Init() error {
