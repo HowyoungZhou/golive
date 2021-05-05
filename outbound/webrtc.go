@@ -68,7 +68,6 @@ func (o *WebRTCOutbound) serveHTTP() {
 			c.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
-		// TODO: load from config
 		peerConnectionConfig := o.options.WebRTC
 		// Create a new PeerConnection
 		peerConnection, err := webrtc.NewPeerConnection(peerConnectionConfig)
