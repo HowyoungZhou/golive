@@ -19,12 +19,14 @@ type ExecProcess struct {
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
 	stdout  io.ReadCloser
+	logger  *log.Entry
 }
 
 func NewExecProcess(options *ExecProcessOptions) (*ExecProcess, error) {
 	return &ExecProcess{
 		options: options,
 		cmd:     exec.Command(options.Path, options.Args...),
+		logger:  log.New().WithFields(log.Fields{"module": "ExecProcess"}),
 	}, nil
 }
 
@@ -57,14 +59,16 @@ func (e *ExecProcess) Init() error {
 	if err != nil {
 		return err
 	}
+	e.logger.WithFields(log.Fields{"path": e.cmd.Path, "args": e.cmd.Args}).Info("process started")
+
 	go func() {
 		in := bufio.NewScanner(stderr)
 
 		for in.Scan() {
-			log.Errorln(in.Text())
+			e.logger.Infoln(in.Text())
 		}
 		if err := in.Err(); err != nil {
-			log.WithError(err).Error("failed to read stderr")
+			e.logger.WithError(err).Error("failed to read stderr")
 		}
 	}()
 
