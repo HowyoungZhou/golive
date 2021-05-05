@@ -14,6 +14,7 @@ type ExecProcessOptions struct {
 	Args []string
 }
 
+// ExecProcess run a process
 type ExecProcess struct {
 	options *ExecProcessOptions
 	cmd     *exec.Cmd
@@ -22,6 +23,7 @@ type ExecProcess struct {
 	logger  *log.Entry
 }
 
+// NewExecProcess creates a new instance of ExecProcess
 func NewExecProcess(options *ExecProcessOptions) (*ExecProcess, error) {
 	return &ExecProcess{
 		options: options,
@@ -30,6 +32,7 @@ func NewExecProcess(options *ExecProcessOptions) (*ExecProcess, error) {
 	}, nil
 }
 
+// RegisterExecProcess registers a new instance to the server
 func RegisterExecProcess(server *server.Server, id string, options map[string]interface{}) (server.Process, error) {
 	opt := &ExecProcessOptions{}
 	if err := mapstructure.Decode(options, opt); err != nil {
@@ -38,6 +41,7 @@ func RegisterExecProcess(server *server.Server, id string, options map[string]in
 	return NewExecProcess(opt)
 }
 
+// Init start the process
 func (e *ExecProcess) Init() error {
 	var err error
 	e.stdin, err = e.cmd.StdinPipe()
@@ -75,10 +79,12 @@ func (e *ExecProcess) Init() error {
 	return nil
 }
 
+// Read pipes the data from the stdout
 func (e *ExecProcess) Read(p []byte) (n int, err error) {
 	return e.stdout.Read(p)
 }
 
+// Write pipes the data to the stdin
 func (e *ExecProcess) Write(p []byte) (n int, err error) {
 	return e.stdin.Write(p)
 }

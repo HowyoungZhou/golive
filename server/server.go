@@ -105,6 +105,7 @@ func (s *Server) AddPipe(in string, outs []string) error {
 		if !ok {
 			return errors.New("unknown outbound: " + out)
 		}
+		// allocate a new channel and start a pipe goroutine
 		c := make(chan []byte, 102400)
 		go pipeWrite(o, c)
 		outChannels = append(outChannels, c)
@@ -144,6 +145,7 @@ func (s *Server) Run() error {
 
 func pipeWrite(o io.Writer, c chan []byte) {
 	for {
+		// fetch a buffer from the channel and write to the outbound
 		_, err := o.Write(<-c)
 		if err != nil {
 			panic(err)
@@ -153,6 +155,7 @@ func pipeWrite(o io.Writer, c chan []byte) {
 
 func pipeRead(in io.Reader, channels []chan []byte) {
 	for {
+		// read from inbound
 		buffer := make([]byte, 1316)
 		n, err := in.Read(buffer)
 		if n == 0 {
@@ -163,6 +166,7 @@ func pipeRead(in io.Reader, channels []chan []byte) {
 			panic(err)
 		}
 
+		// feed the buffer to all channels
 		for _, c := range channels {
 			c <- buffer[:n]
 		}

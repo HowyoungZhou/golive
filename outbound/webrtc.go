@@ -25,12 +25,14 @@ type WebRTCOutboundOptions struct {
 	}
 }
 
+// WebRTCOutbound implements WebRTC protocol for output
 type WebRTCOutbound struct {
 	options *WebRTCOutboundOptions
 	tracks  []*webrtc.TrackLocalStaticRTP
 	logger  *log.Entry
 }
 
+// NewWebRTCOutbound creates a new instance of WebRTCOutbound
 func NewWebRTCOutbound(options *WebRTCOutboundOptions) (*WebRTCOutbound, error) {
 	res := &WebRTCOutbound{
 		options: options,
@@ -46,6 +48,7 @@ func NewWebRTCOutbound(options *WebRTCOutboundOptions) (*WebRTCOutbound, error) 
 	return res, nil
 }
 
+// RegisterWebRTC registers a new instance to the server, create a new sub-outbound for each track
 func RegisterWebRTC(server *server.Server, id string, options map[string]interface{}) (server.Outbound, error) {
 	opt := &WebRTCOutboundOptions{}
 	if err := mapstructure.Decode(options, opt); err != nil {
@@ -141,13 +144,14 @@ func (o *WebRTCOutbound) serveHTTP() {
 	o.logger.WithField("addr", o.options.SDPServer.ListenAddress).WithError(err).Error("SDP server ended with error")
 }
 
+// Init runs the HTTP SDP server
 func (o *WebRTCOutbound) Init() error {
 	go o.serveHTTP()
 	return nil
 }
 
 func (o *WebRTCOutbound) Write(p []byte) (int, error) {
-	return 0, errors.New("can not write directly to a WebRTC outbound, change \"out\" to [outbound id]:[track id] instead")
+	return 0, errors.New("can not write directly to a WebRTC outbound, change \"out\" to \"[outbound id]:[track id]\" instead")
 }
 
 type WebRtcTrackOutbound struct {
@@ -158,6 +162,7 @@ func (o *WebRtcTrackOutbound) Init() error {
 	return nil
 }
 
+// Write writes packet to the track
 func (o *WebRtcTrackOutbound) Write(p []byte) (int, error) {
 	return o.track.Write(p)
 }
