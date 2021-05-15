@@ -1,0 +1,160 @@
+{
+  "inbounds": [
+    {
+      "id": "srt-in",
+      "type": "srt",
+      "options": {
+        "host": "0.0.0.0",
+        "port": 5000,
+        "timeout": 1000,
+        "options": {
+          "transtype": "live",
+          "pkt_size": "1024000"
+        }
+      }
+    },
+    {
+      "id": "ffmpeg-video-out",
+      "type": "srt",
+      "options": {
+        "host": "0.0.0.0",
+        "port": 10000,
+        "timeout": 1000,
+        "options": {
+          "transtype": "live",
+          "pkt_size": "1024000"
+        }
+      }
+    },
+    {
+      "id": "ffmpeg-audio-out",
+      "type": "srt",
+      "options": {
+        "host": "0.0.0.0",
+        "port": 10001,
+        "timeout": 1000,
+        "options": {
+          "transtype": "live",
+          "pkt_size": "1024000"
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "id": "webrtc-out",
+      "type": "webrtc",
+      "options": {
+        "webrtc": {
+          "iceServers": [
+            {
+              "urls": [
+                "stun:stun.l.google.com:19302"
+              ]
+            }
+          ]
+        },
+        "sdpServer": {
+          "cors": {
+            "allowOrigins": [
+              "*"
+            ],
+            "allowMethods": [
+              "POST",
+              "PATCH"
+            ],
+            "allowHeaders": [
+              "Content-Type",
+              "Content-Length",
+              "Accept-Encoding",
+              "X-CSRF-Token",
+              "Authorization",
+              "accept",
+              "origin",
+              "Cache-Control",
+              "X-Requested-With"
+            ]
+          },
+          "listenAddress": "0.0.0.0:8080"
+        },
+        "tracks": [
+          {
+            "codecCapability": {
+              "mimeType": "video/h264"
+            },
+            "id": "video",
+            "streamId": "pion"
+          },
+          {
+            "codecCapability": {
+              "mimeType": "audio/opus"
+            },
+            "id": "audio",
+            "streamId": "pion"
+          }
+        ]
+      }
+    },
+    {
+      "id": "srt-out",
+      "type": "srt",
+      "options": {
+        "host": "0.0.0.0",
+        "port": 5001,
+        "timeout": 1000,
+        "bufferSize": 1000,
+        "options": {
+          "transtype": "live"
+        }
+      }
+    }
+  ],
+  "processes": [
+    {
+      "id": "ffmpeg",
+      "type": "exec",
+      "options": {
+        "path": "ffmpeg",
+        "args": [
+          "-i",
+          "-",
+          "-vcodec",
+          "libx264",
+          "-an",
+          "-f",
+          "rtp",
+          "srt://127.0.0.1:10000?type=sender",
+          "-acodec",
+          "opus",
+          "-strict",
+          "-2",
+          "-vn",
+          "-f",
+          "rtp",
+          "srt://127.0.0.1:10001?type=sender"
+        ]
+      }
+    }
+  ],
+  "pipes": [
+    {
+      "in": "srt-in",
+      "outs": [
+        "srt-out",
+        "ffmpeg"
+      ]
+    },
+    {
+      "in": "ffmpeg-video-out",
+      "outs": [
+        "webrtc-out:video"
+      ]
+    },
+    {
+      "in": "ffmpeg-audio-out",
+      "outs": [
+        "webrtc-out:audio"
+      ]
+    }
+  ]
+}
